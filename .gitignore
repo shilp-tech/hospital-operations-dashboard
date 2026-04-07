@@ -1,0 +1,44 @@
+# ── Secrets ────────────────────────────────────────────────────────────────────
+.env
+*.key
+*.pem
+
+# ── Data files (too large for git; download via download_data.py) ──────────────
+data/*.csv
+data/*.xlsx
+data/*.parquet
+
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.Python
+
+# ── Virtual environments ────────────────────────────────────────────────────────
+venv/
+env/
+.venv/
+.env/
+
+# ── IDE / OS ────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Testing / coverage ──────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ── Logs ────────────────────────────────────────────────────────────────────────
+*.log
+logs/

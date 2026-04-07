@@ -1,0 +1,16 @@
+[build]
+# Use our Dockerfile for the build
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Railway sets $PORT automatically — Dockerfile CMD reads it
+startCommand = "gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile - --error-logfile - app.app:server"
+
+# Restart policy: retry on crash, max 10 times
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Health check — Railway pings / to confirm app is alive
+healthcheckPath = "/"
+healthcheckTimeout = 30
