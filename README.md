@@ -5,13 +5,18 @@
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white)](https://python.org)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Plotly Dash](https://img.shields.io/badge/Plotly_Dash-2.17-3D9BE9?logo=plotly&logoColor=white)](https://dash.plotly.com)
+[![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
 [![Deploy on Railway](https://img.shields.io/badge/Deploy-Railway-8B5CF6?logo=railway)](https://railway.app)
+
+**🔴 Live Demo:** [https://hospital-operations-dashboard-production.up.railway.app](https://hospital-operations-dashboard-production.up.railway.app)
+
+**GitHub:** [github.com/shilp-tech/hospital-operations-dashboard](https://github.com/shilp-tech/hospital-operations-dashboard)
 
 ---
 
 ## Screenshot
 
-> *Replace this section with a screenshot of your live dashboard after deployment.*
+> *Add a screenshot of the live dashboard here.*
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -41,12 +46,12 @@ This project demonstrates the full data lifecycle that a **Healthcare Informatic
 
 | Stage | What it demonstrates |
 |-------|---------------------|
-| **Data Acquisition** | Automated download of real CMS public datasets |
-| **ETL Pipeline** | Cleaning CMS's notoriously messy data ("Not Available" → NULL, dedup, type coercion) |
+| **Data Acquisition** | Automated paginated download of real CMS public datasets via API |
+| **ETL Pipeline** | Cleaning CMS's notoriously messy data ("Not Available" → NULL, dedup, type coercion, derived fields) |
 | **Schema Design** | Normalized PostgreSQL schema with FK constraints and indexes |
 | **Analytical SQL** | 6 production-grade report queries using window functions, CTEs, CASE WHEN, HAVING |
 | **Visualization** | Dark-themed Plotly Dash dashboard with live filters and callbacks |
-| **Deployment** | Docker + Railway with environment-variable-driven configuration |
+| **Deployment** | Docker + Railway (app) + Supabase (managed PostgreSQL), fully cloud-hosted |
 
 ---
 
@@ -56,12 +61,12 @@ This project demonstrates the full data lifecycle that a **Healthcare Informatic
 
 | Dataset | Description | Records |
 |---------|-------------|---------|
-| [Hospital General Information](https://data.cms.gov/provider-data/topics/hospitals) | Star ratings, ownership, location, national comparisons | ~5,000 hospitals |
-| [Timely and Effective Care](https://data.cms.gov/provider-data/topics/hospitals) | Measure-level performance scores (ED throughput, readmissions, etc.) | ~200,000 rows |
+| [Hospital General Information](https://data.cms.gov/provider-data/topics/hospitals) | Star ratings, ownership, location, national comparisons | 5,426 hospitals |
+| [Timely and Effective Care](https://data.cms.gov/provider-data/topics/hospitals) | Measure-level performance scores (ED throughput, readmissions, etc.) | 138,129 rows |
 
 > **Data License:** CMS public datasets are open to the public under [data.cms.gov terms](https://data.cms.gov/about).
 >
-> If the automated download fails (URLs change quarterly), run `python etl/load_data.py --simulated` to generate 600+ synthetic hospitals with realistic distributions. This is documented clearly in the app footer.
+> **API note:** The CMS DKAN API enforces a 1,500-row page limit. The downloader handles full pagination automatically. National comparison labels were removed from the API payload in 2024 and are re-derived from measure count fields (better/same/worse counts) during ETL.
 
 ---
 
@@ -71,15 +76,54 @@ This project demonstrates the full data lifecycle that a **Healthcare Informatic
 |-------|-----------|---------|
 | Language | Python 3.11 | ETL, dashboard backend |
 | Database | PostgreSQL 15 | OLAP-style relational store |
+| Database hosting | **Supabase** (free tier, us-east-1) | Managed PostgreSQL, no infrastructure to run |
 | ORM / Connection | SQLAlchemy 2.0 | DB abstraction, connection pooling |
+| DB connector | psycopg2-binary | PostgreSQL driver |
 | Data Processing | pandas 2.2, numpy | Cleaning, transformation |
 | Dashboard | Plotly Dash 2.17 | Interactive web app |
 | UI Components | Dash Bootstrap Components | Responsive dark-theme layout |
 | Charts | Plotly 5.22 | Bar, donut, scatter visualizations |
 | Web Server | Gunicorn 22 | Production WSGI server |
-| Containerization | Docker (python:3.11-slim) | Reproducible deployment |
-| Hosting | Railway | Cloud PaaS with managed PostgreSQL |
-| Config | python-dotenv | Secret management |
+| Containerization | Docker (python:3.11-slim) | Reproducible build |
+| App hosting | **Railway** | Docker-based cloud deployment, auto-deploys from GitHub |
+| Config | python-dotenv | Secret management via `.env` |
+
+---
+
+## Deployment Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Production Setup                              │
+│                                                                      │
+│   GitHub Repo                                                        │
+│   (main branch)                                                      │
+│        │                                                             │
+│        │  push → auto-deploy                                         │
+│        ▼                                                             │
+│   ┌─────────────┐         DATABASE_URL          ┌────────────────┐  │
+│   │   Railway   │ ────────────────────────────► │   Supabase     │  │
+│   │  (Docker)   │         (env variable)        │  PostgreSQL    │  │
+│   │  Gunicorn   │                               │  us-east-1     │  │
+│   │  port $PORT │                               │                │  │
+│   └─────────────┘                               │  hospitals     │  │
+│         │                                       │  (5,426 rows)  │  │
+│         │ public URL                            │  timely_care   │  │
+│         ▼                                       │  (138,129 rows)│  │
+│   https://hospital-operations-                  └────────────────┘  │
+│   dashboard-production.up.railway.app                                │
+│                                                                      │
+│   Connection: Supabase Session Pooler                                │
+│   Host: aws-1-us-east-1.pooler.supabase.com:5432                    │
+│   (session pooler used instead of direct connection for             │
+│    compatibility with Railway's network and DNS)                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Why Supabase + Railway instead of Railway-managed PostgreSQL:**
+- Supabase free tier provides 500MB PostgreSQL with a web SQL editor — useful for running schema DDL directly
+- Railway provides zero-config Docker deployment with automatic public URLs and GitHub integration
+- The session pooler URL (`aws-1-us-east-1.pooler.supabase.com`) is more reliable across different network environments than the direct connection URL (`db.*.supabase.co`), which can have DNS resolution issues on some networks
 
 ---
 
@@ -89,7 +133,7 @@ This project demonstrates the full data lifecycle that a **Healthcare Informatic
 hospital-operations-dashboard/
 │
 ├── data/
-│   └── download_data.py          # Downloads CMS CSVs (with fallback URLs)
+│   └── download_data.py          # Paginated CMS API downloader (1,500 rows/page)
 │
 ├── etl/
 │   ├── create_schema.py          # Idempotent DDL — CREATE TABLE IF NOT EXISTS
@@ -110,7 +154,7 @@ hospital-operations-dashboard/
 │
 ├── .env.example                  # Template for environment variables
 ├── .gitignore                    # Excludes .env, CSVs, __pycache__
-├── requirements.txt              # Pinned Python dependencies
+├── requirements.txt              # Python dependencies
 ├── Dockerfile                    # python:3.11-slim, Gunicorn CMD
 ├── railway.toml                  # Build + deploy config for Railway
 └── README.md
@@ -166,11 +210,17 @@ hospital-operations-dashboard/
 Indexes: state, overall_rating, hospital_type, ownership, provider_id (timely_care)
 ```
 
+**Live database stats (Supabase, as loaded):**
+- `hospitals`: 5,426 rows
+- `timely_care`: 138,129 rows
+
 **CMS Comparison Field Values:**
 - `"Above the national average"` — hospital performs better than peers
 - `"Same as the national average"` — within expected range
 - `"Below the national average"` — flagged for quality improvement
 - `NULL` — insufficient data to compare
+
+> **Note on derivation:** The CMS API no longer returns pre-computed comparison labels. The ETL derives them from measure count fields: if `count_of_*_measures_better > worse` → Above; `worse > better` → Below; otherwise → Same.
 
 ---
 
@@ -194,32 +244,43 @@ Each query is written the way a production report writer would — with CTEs, wi
 ### Prerequisites
 
 - Python 3.11+
-- PostgreSQL 15+ running locally
+- PostgreSQL 15+ (local install **or** a free Supabase project)
 - `git`
 
 ### Step 1 — Clone and configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/hospital-operations-dashboard.git
+git clone https://github.com/shilp-tech/hospital-operations-dashboard.git
 cd hospital-operations-dashboard
 
-# Set up environment
 cp .env.example .env
-# Edit .env: set DATABASE_URL to your local PostgreSQL connection string
+# Edit .env and set DATABASE_URL (see formats below)
 ```
 
-**`.env` example:**
+**Local PostgreSQL:**
 ```
 DATABASE_URL=postgresql://postgres:mypassword@localhost:5432/hospital_dashboard
 DASH_DEBUG=true
 ```
 
+**Supabase (Session Pooler — recommended for cloud use):**
+```
+DATABASE_URL=postgresql://postgres.YOURREF:PASSWORD@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+DASH_DEBUG=true
+```
+
+> **Password encoding:** If your password contains special characters (e.g. `@`, `#`, `!`), URL-encode them before embedding in the connection string. For example, `p@ss` becomes `p%40ss`. You can encode a password with Python: `python -c "import urllib.parse; print(urllib.parse.quote('your_password'))"`.
+>
+> **Direct vs. Session Pooler:** The direct Supabase host (`db.YOURREF.supabase.co`) can have DNS resolution issues on some networks and ISPs. If you see `could not translate host name` errors, switch to the Session Pooler URL (`aws-1-us-east-1.pooler.supabase.com`) — it resolves reliably from all environments.
+
 ### Step 2 — Create the database
 
+**Local PostgreSQL:**
 ```bash
-# In psql (or pgAdmin), create the database:
 psql -U postgres -c "CREATE DATABASE hospital_dashboard;"
 ```
+
+**Supabase:** No action needed — the `postgres` database already exists. Skip to Step 3.
 
 ### Step 3 — Install Python dependencies
 
@@ -236,15 +297,22 @@ python etl/create_schema.py
 # Output: "Schema creation complete (idempotent — safe to re-run)."
 ```
 
+**Alternative (Supabase):** Paste the contents of `etl/create_schema.py` DDL block directly into the Supabase **SQL Editor** and run it there. This avoids any local network connectivity requirements.
+
 ### Step 5 — Download and load data
 
 ```bash
-# Option A: Real CMS data (recommended)
-python data/download_data.py     # ~100MB download
-python etl/load_data.py          # loads ~5,000 hospitals + ~200,000 timely care rows
+# Download all CMS data (handles pagination automatically — ~4 minutes)
+python data/download_data.py
 
-# Option B: Synthetic data (if CMS URLs are unavailable or for quick testing)
-python etl/load_data.py --simulated    # generates 600 realistic hospitals
+# Load into PostgreSQL (~2-3 minutes for 138,000+ rows)
+python etl/load_data.py
+
+# Or, if you want to start fresh:
+python etl/load_data.py --reload
+
+# No internet / quick test — generate 600 synthetic hospitals:
+python etl/load_data.py --simulated
 ```
 
 ### Step 6 — Run the dashboard
@@ -254,60 +322,56 @@ python app/app.py
 # Open: http://localhost:8050
 ```
 
-**Full reload (truncate + reload from scratch):**
+**Full reload from scratch:**
 ```bash
 python etl/load_data.py --reload
 ```
 
 ---
 
-## Railway Deployment
+## Deployment — Supabase + Railway (actual production setup)
 
-Railway provides managed PostgreSQL and automatic deployments from GitHub.
+This is the exact setup used for the live demo.
 
-### Step 1 — Create Railway project
+### Step 1 — Set up Supabase database
 
-1. Go to [railway.app](https://railway.app) and create a new project
-2. Click **Add Service → GitHub Repo** and connect this repository
-3. Railway will detect the `Dockerfile` automatically
+1. Go to [supabase.com](https://supabase.com) and create a free project (select **us-east-1** region)
+2. Once provisioned, open **SQL Editor** and run the full DDL from `etl/create_schema.py` (the `DDL` string, everything between the triple-quotes)
+3. Confirm both tables exist: **Table Editor** should show `hospitals` and `timely_care`
+4. Copy your connection string from **Project Settings → Database → Connection String → Session Pooler** — it looks like:
+   ```
+   postgresql://postgres.YOURREF:PASSWORD@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+   ```
 
-### Step 2 — Add PostgreSQL
+### Step 2 — Load data from your local machine
 
-1. In your Railway project, click **New → Database → PostgreSQL**
-2. Railway creates a managed PostgreSQL instance
-3. Copy the **`DATABASE_URL`** from the PostgreSQL service's Variables tab
-
-### Step 3 — Set environment variables
-
-In your Railway app service → **Variables**, add:
-
-```
-DATABASE_URL=postgresql://...  (paste from PostgreSQL service)
-```
-
-Railway sets `PORT` automatically — do not set it manually.
-
-### Step 4 — Run the ETL (one-time)
-
-Use Railway's **Shell** (or a Railway one-off command) to initialize the database:
+Point your local `.env` at the Supabase Session Pooler URL and run the ETL:
 
 ```bash
-# In Railway Shell for your app service:
-python etl/create_schema.py
+# In .env:
+DATABASE_URL=postgresql://postgres.YOURREF:ENCODED_PASSWORD@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+
+# Then run:
 python data/download_data.py
 python etl/load_data.py
-
-# Or with synthetic data:
-python etl/load_data.py --simulated
 ```
 
-Alternatively, trigger it via a temporary `CMD` override in Railway settings, then revert.
+This loads 5,426 hospitals and 138,129 timely care rows into Supabase over your internet connection. Takes 3–5 minutes.
 
-### Step 5 — Deploy
+### Step 3 — Deploy app to Railway
 
-Railway auto-deploys on every push to `main`. Force a manual deploy from the Railway dashboard if needed.
+1. Push this repo to GitHub (the `.gitignore` already excludes `.env` and CSVs)
+2. Go to [railway.app](https://railway.app) → **New Project → Deploy from GitHub repo**
+3. Select your repository — Railway detects the `Dockerfile` automatically
+4. In your service → **Variables**, add one variable:
+   ```
+   DATABASE_URL=postgresql://postgres.YOURREF:ENCODED_PASSWORD@aws-1-us-east-1.pooler.supabase.com:5432/postgres
+   ```
+   Do **not** set `PORT` — Railway injects it automatically and the `Dockerfile` reads it via `${PORT:-8050}`.
+5. Trigger a deploy (or push a commit). Railway builds the Docker image and starts Gunicorn.
+6. Your app is live at the Railway-generated URL (e.g. `https://hospital-operations-dashboard-production.up.railway.app`)
 
-**Your dashboard will be live at:** `https://your-project.railway.app`
+**Auto-deploy:** Every push to `main` triggers a new Railway build and deploy — no manual steps needed after initial setup.
 
 ---
 
@@ -317,7 +381,7 @@ Railway auto-deploys on every push to `main`. Force a manual deploy from the Rai
 # Build
 docker build -t hospital-dashboard .
 
-# Run (pass your DATABASE_URL)
+# Run (substitute your DATABASE_URL)
 docker run -p 8050:8050 \
   -e DATABASE_URL="postgresql://postgres:pass@host.docker.internal:5432/hospital_dashboard" \
   hospital-dashboard
